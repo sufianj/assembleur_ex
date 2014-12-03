@@ -1,0 +1,376 @@
+Microsoft (R) Macro Assembler Version 6.15.8803		    12/28/12 15:35:38
+8_1.asm							     Page 1 - 1
+
+
+				.model small
+				.stack
+ 0000				.data
+ 002D				   student struct                ;结构定义
+ 0000  0000			          snumber dw 0           ;编号，代表名次
+ 0002  000F [			          sid db 15 dup('$')     ;学号
+        24
+       ]
+ 0011  0014 [			          sname db 20 dup('$')   ;最多20位，姓名
+        24
+       ]
+ 0025  0000			          score1  dw 0           ;成绩1
+ 0027  0000			          score2  dw 0           ;成绩2
+ 0029  0000			          score3  dw 0           ;成绩3
+ 002B  0000			          ttscore dw 0           ;总分
+				   student ends
+				   
+ 0000 0001 63 6F 6D 70 75	   scoresheet student <1,'computer01$','zhangsan$',90,70,60,>
+       74 65 72 30 31 24
+       0004 [
+        24
+       ] 7A 68 61 6E 67
+       73 61 6E 24
+       000B [
+        24
+       ] 005A 0046 003C
+       0000
+ 002D  0002 63 6F 6D 70		              student <2,'computer02$','lisi    $',100,0,100,>
+       75 74 65 72 30 32
+       24
+       0004 [
+        24
+       ] 6C 69 73 69 20
+       20 20 20 24
+       000B [
+        24
+       ] 0064 0000 0064
+       0000
+ 005A  0003 63 6F 6D 70		              student <3,'computer03$','wanger  $',95,66,88,>
+       75 74 65 72 30 33
+       24
+       0004 [
+        24
+       ] 77 61 6E 67 65
+       72 20 20 24
+       000B [
+        24
+       ] 005F 0042 0058
+       0000
+ 0087  0004 63 6F 6D 70		              student <4,'computer04$','zhuwu   $',120,90,99,>
+       75 74 65 72 30 34
+       24
+       0004 [
+        24
+       ] 7A 68 75 77 75
+       20 20 20 24
+       000B [
+        24
+       ] 0078 005A 0063
+       0000
+ 00B4  0005 63 6F 6D 70		              student <5,'computer05$','john    $',90,80,95,>
+       75 74 65 72 30 35
+       24
+       0004 [
+        24
+       ] 6A 6F 68 6E 20
+       20 20 20 24
+       000B [
+        24
+       ] 005A 0050 005F
+       0000
+ 00E1				                       ;成绩单长度可以任意，这里只列举5个纪录
+ = 0005				    sheetlength=($-scoresheet)/(type scoresheet) ;成绩单长度，即纪录条数
+ 00E1 00			    pushcount db 0  ;临时存放被显示数据的位数
+ 0000				.code
+				    nextline macro  ;显示换行的宏定义
+				      mov ah,2
+				      mov dl,10
+				      int 21h
+				      mov ah,2
+				      mov dl,13
+				      int 21h
+				     endm
+				     dispone macro one    ;显示一个字符的有参数宏定义
+				       mov ah,2
+				       mov dl,one
+				       int 21h
+				     endm
+				 dispscore macro          ;按照10进制显示内存单元数据的宏定义
+				       local loop1,print  ;局部标号定义
+				         push bx
+				         push dx
+				         mov bl,10
+				    loop1: div bl
+				         mov dl,ah
+				         mov ah,0
+				         push dx           ;把每次除以10的余数压入堆栈，并记录数据位个数
+				         inc pushcount
+				         cmp al,0
+				         jne loop1
+				   print: pop dx           ;从堆栈弹出每位数据并显示
+				         add dl,30h
+				         dispone dl
+				         dec pushcount
+				         jnz print
+				         dispone 20h       ;显示一个空格
+				         pop dx
+				         pop bx
+				 endm
+
+				.startup
+ 0017  8D 1E 0000 R		  lea bx, scoresheet
+ 001B  B9 0005			  mov cx,sheetlength
+				  .repeat                       ;统计每条记录的总分
+ 001E  8B 47 25			    mov ax,[bx].student.score1
+ 0021  03 47 27			    add ax,[bx].student.score2
+ 0024  03 47 29			    add ax,[bx].student.score3
+ 0027  89 47 2B			    mov [bx].student.ttscore,ax
+ 002A  C7 07 0000		    mov [bx].student.snumber, 0 ;名次初始化为0
+ 002E  83 C3 2D			    add bx, type scoresheet
+				  .untilcxz
+
+ 0033  BA 0000			   mov dx,0        ;DX控制总循环次数，初始值为0
+ 0036  52			   push dx
+ 0037				begin:
+ 0037  8D 1E 0000 R		   lea bx, scoresheet
+ 003B  B9 0005			   mov cx, sheetlength
+				  .repeat
+				    .if [bx].student.snumber==0    ;找到第一个未排名的纪录
+ 0043  8B 47 2B			      mov ax,[bx].student.ttscore  ;总分记录在AX中
+				      .break
+				    .else
+ 004A  83 C3 2D			      add bx, type scoresheet
+				    .endif
+				  .untilcxz
+
+ 004F  BB 0000 R		    mov bx,offset scoresheet
+ 0052  B9 0005			    mov cx,sheetlength
+				   .repeat
+				    .if [bx].student.snumber==0
+				      .if [bx].student.ttscore>=ax ;逐一比较找到一个未排序的且总分最高的纪录
+ 005F  8B 47 2B			         mov ax,[bx].student.ttscore;AX保存最高的总分
+ 0062  8B FB			         mov di,bx                  ;有最高总分的记录地址保存在DI寄存器中
+				      .endif
+				    .endif
+ 0064  83 C3 2D			     add bx, type scoresheet
+				   .untilcxz
+
+				    nextline                      ;在新的一行显示每条记录信息
+ 0069  B4 02		     1	      mov ah,2
+ 006B  B2 0A		     1	      mov dl,10
+ 006D  CD 21		     1	      int 21h
+ 006F  B4 02		     1	      mov ah,2
+ 0071  B2 0D		     1	      mov dl,13
+ 0073  CD 21		     1	      int 21h
+ 0075  8B DF			    mov bx,di
+ 0077  5A			    pop dx
+ 0078  42			    inc dx
+ 0079  52			    push dx
+ 007A  89 17			    mov [bx].student.snumber,dx   ;DX加1为当前名次
+ 007C  8B C2			    mov ax,dx                     ;显示名次
+				    dispscore
+ 007E  53		     1	         push bx
+ 007F  52		     1	         push dx
+ 0080  B3 0A		     1	         mov bl,10
+ 0082  F6 F3		     1	    ??0000: div bl
+ 0084  8A D4		     1	         mov dl,ah
+ 0086  B4 00		     1	         mov ah,0
+ 0088  52		     1	         push dx           ;把每次除以10的余数压入堆栈，并记录数据位个数
+ 0089  FE 06 00E1 R	     1	         inc pushcount
+ 008D  3C 00		     1	         cmp al,0
+ 008F  75 F1		     1	         jne ??0000
+ 0091  5A		     1	   ??0001: pop dx           ;从堆栈弹出每位数据并显示
+ 0092  80 C2 30		     1	         add dl,30h
+ 0095  B4 02		     2	       mov ah,2
+ 0097  8A D2		     2	       mov dl,dl
+ 0099  CD 21		     2	       int 21h
+ 009B  FE 0E 00E1 R	     1	         dec pushcount
+ 009F  75 F0		     1	         jnz ??0001
+ 00A1  B4 02		     2	       mov ah,2
+ 00A3  B2 20		     2	       mov dl,20h
+ 00A5  CD 21		     2	       int 21h
+ 00A7  5A		     1	         pop dx
+ 00A8  5B		     1	         pop bx
+ 00A9  8D 57 02			    lea dx, [bx].student.sid      ;显示学号
+ 00AC  B4 09			    mov ah,9
+ 00AE  CD 21			    int 21h
+				    dispone 20h
+ 00B0  B4 02		     1	       mov ah,2
+ 00B2  B2 20		     1	       mov dl,20h
+ 00B4  CD 21		     1	       int 21h
+ 00B6  8D 57 11			    lea dx, [bx].student.sname    ;显示姓名
+ 00B9  B4 09			    mov ah,9
+ 00BB  CD 21			    int 21h
+				    dispone 20h
+ 00BD  B4 02		     1	       mov ah,2
+ 00BF  B2 20		     1	       mov dl,20h
+ 00C1  CD 21		     1	       int 21h
+ 00C3  8B 47 25			    mov ax, [bx].student.score1   ;显示成绩1
+				    dispscore
+ 00C6  53		     1	         push bx
+ 00C7  52		     1	         push dx
+ 00C8  B3 0A		     1	         mov bl,10
+ 00CA  F6 F3		     1	    ??0002: div bl
+ 00CC  8A D4		     1	         mov dl,ah
+ 00CE  B4 00		     1	         mov ah,0
+ 00D0  52		     1	         push dx           ;把每次除以10的余数压入堆栈，并记录数据位个数
+ 00D1  FE 06 00E1 R	     1	         inc pushcount
+ 00D5  3C 00		     1	         cmp al,0
+ 00D7  75 F1		     1	         jne ??0002
+ 00D9  5A		     1	   ??0003: pop dx           ;从堆栈弹出每位数据并显示
+ 00DA  80 C2 30		     1	         add dl,30h
+ 00DD  B4 02		     2	       mov ah,2
+ 00DF  8A D2		     2	       mov dl,dl
+ 00E1  CD 21		     2	       int 21h
+ 00E3  FE 0E 00E1 R	     1	         dec pushcount
+ 00E7  75 F0		     1	         jnz ??0003
+ 00E9  B4 02		     2	       mov ah,2
+ 00EB  B2 20		     2	       mov dl,20h
+ 00ED  CD 21		     2	       int 21h
+ 00EF  5A		     1	         pop dx
+ 00F0  5B		     1	         pop bx
+ 00F1  8B 47 27			    mov ax, [bx].student.score2   ;显示成绩2
+				    dispscore
+ 00F4  53		     1	         push bx
+ 00F5  52		     1	         push dx
+ 00F6  B3 0A		     1	         mov bl,10
+ 00F8  F6 F3		     1	    ??0004: div bl
+ 00FA  8A D4		     1	         mov dl,ah
+ 00FC  B4 00		     1	         mov ah,0
+ 00FE  52		     1	         push dx           ;把每次除以10的余数压入堆栈，并记录数据位个数
+ 00FF  FE 06 00E1 R	     1	         inc pushcount
+ 0103  3C 00		     1	         cmp al,0
+ 0105  75 F1		     1	         jne ??0004
+ 0107  5A		     1	   ??0005: pop dx           ;从堆栈弹出每位数据并显示
+ 0108  80 C2 30		     1	         add dl,30h
+ 010B  B4 02		     2	       mov ah,2
+ 010D  8A D2		     2	       mov dl,dl
+ 010F  CD 21		     2	       int 21h
+ 0111  FE 0E 00E1 R	     1	         dec pushcount
+ 0115  75 F0		     1	         jnz ??0005
+ 0117  B4 02		     2	       mov ah,2
+ 0119  B2 20		     2	       mov dl,20h
+ 011B  CD 21		     2	       int 21h
+ 011D  5A		     1	         pop dx
+ 011E  5B		     1	         pop bx
+ 011F  8B 47 29			    mov ax, [bx].student.score3   ;显示成绩3
+				    dispscore
+ 0122  53		     1	         push bx
+ 0123  52		     1	         push dx
+ 0124  B3 0A		     1	         mov bl,10
+ 0126  F6 F3		     1	    ??0006: div bl
+ 0128  8A D4		     1	         mov dl,ah
+ 012A  B4 00		     1	         mov ah,0
+ 012C  52		     1	         push dx           ;把每次除以10的余数压入堆栈，并记录数据位个数
+ 012D  FE 06 00E1 R	     1	         inc pushcount
+ 0131  3C 00		     1	         cmp al,0
+ 0133  75 F1		     1	         jne ??0006
+ 0135  5A		     1	   ??0007: pop dx           ;从堆栈弹出每位数据并显示
+ 0136  80 C2 30		     1	         add dl,30h
+ 0139  B4 02		     2	       mov ah,2
+ 013B  8A D2		     2	       mov dl,dl
+ 013D  CD 21		     2	       int 21h
+ 013F  FE 0E 00E1 R	     1	         dec pushcount
+ 0143  75 F0		     1	         jnz ??0007
+ 0145  B4 02		     2	       mov ah,2
+ 0147  B2 20		     2	       mov dl,20h
+ 0149  CD 21		     2	       int 21h
+ 014B  5A		     1	         pop dx
+ 014C  5B		     1	         pop bx
+ 014D  8B 45 2B			    mov ax, [di].student.ttscore  ;显示总分
+				    dispscore
+ 0150  53		     1	         push bx
+ 0151  52		     1	         push dx
+ 0152  B3 0A		     1	         mov bl,10
+ 0154  F6 F3		     1	    ??0008: div bl
+ 0156  8A D4		     1	         mov dl,ah
+ 0158  B4 00		     1	         mov ah,0
+ 015A  52		     1	         push dx           ;把每次除以10的余数压入堆栈，并记录数据位个数
+ 015B  FE 06 00E1 R	     1	         inc pushcount
+ 015F  3C 00		     1	         cmp al,0
+ 0161  75 F1		     1	         jne ??0008
+ 0163  5A		     1	   ??0009: pop dx           ;从堆栈弹出每位数据并显示
+ 0164  80 C2 30		     1	         add dl,30h
+ 0167  B4 02		     2	       mov ah,2
+ 0169  8A D2		     2	       mov dl,dl
+ 016B  CD 21		     2	       int 21h
+ 016D  FE 0E 00E1 R	     1	         dec pushcount
+ 0171  75 F0		     1	         jnz ??0009
+ 0173  B4 02		     2	       mov ah,2
+ 0175  B2 20		     2	       mov dl,20h
+ 0177  CD 21		     2	       int 21h
+ 0179  5A		     1	         pop dx
+ 017A  5B		     1	         pop bx
+ 017B  5A			    pop dx
+				    .if dl==sheetlength
+				       .exit 0
+				    .endif
+ 0186  52			    push dx
+ 0187  E9 FEAD			    jmp begin
+				   end
+Microsoft (R) Macro Assembler Version 6.15.8803		    12/28/12 15:35:38
+8_1.asm							     Symbols 2 - 1
+
+
+
+
+Macros:
+
+                N a m e                 Type
+
+dispone  . . . . . . . . . . . .	Proc
+dispscore  . . . . . . . . . . .	Proc
+nextline . . . . . . . . . . . .	Proc
+
+
+Structures and Unions:
+
+                N a m e                  Size
+                                         Offset      Type
+
+student  . . . . . . . . . . . .	 002D
+  snumber  . . . . . . . . . . .	 0000	     Word
+  sid  . . . . . . . . . . . . .	 0002	     Byte
+  sname  . . . . . . . . . . . .	 0011	     Byte
+  score1 . . . . . . . . . . . .	 0025	     Word
+  score2 . . . . . . . . . . . .	 0027	     Word
+  score3 . . . . . . . . . . . .	 0029	     Word
+  ttscore  . . . . . . . . . . .	 002B	     Word
+
+
+Segments and Groups:
+
+                N a m e                 Size     Length   Align   Combine Class
+
+DGROUP . . . . . . . . . . . . .	GROUP
+_DATA  . . . . . . . . . . . . .	16 Bit	 00E2	  Word	  Public  'DATA'	
+STACK  . . . . . . . . . . . . .	16 Bit	 0400	  Para	  Stack	  'STACK'	 
+_TEXT  . . . . . . . . . . . . .	16 Bit	 018A	  Word	  Public  'CODE'	
+
+
+Symbols:
+
+                N a m e                 Type     Value    Attr
+
+??0000 . . . . . . . . . . . . .	L Near	 0082	  _TEXT	
+??0001 . . . . . . . . . . . . .	L Near	 0091	  _TEXT	
+??0002 . . . . . . . . . . . . .	L Near	 00CA	  _TEXT	
+??0003 . . . . . . . . . . . . .	L Near	 00D9	  _TEXT	
+??0004 . . . . . . . . . . . . .	L Near	 00F8	  _TEXT	
+??0005 . . . . . . . . . . . . .	L Near	 0107	  _TEXT	
+??0006 . . . . . . . . . . . . .	L Near	 0126	  _TEXT	
+??0007 . . . . . . . . . . . . .	L Near	 0135	  _TEXT	
+??0008 . . . . . . . . . . . . .	L Near	 0154	  _TEXT	
+??0009 . . . . . . . . . . . . .	L Near	 0163	  _TEXT	
+@CodeSize  . . . . . . . . . . .	Number	 0000h	 
+@DataSize  . . . . . . . . . . .	Number	 0000h	 
+@Interface . . . . . . . . . . .	Number	 0000h	 
+@Model . . . . . . . . . . . . .	Number	 0002h	 
+@Startup . . . . . . . . . . . .	L Near	 0000	  _TEXT	
+@code  . . . . . . . . . . . . .	Text   	 _TEXT
+@data  . . . . . . . . . . . . .	Text   	 DGROUP
+@fardata?  . . . . . . . . . . .	Text   	 FAR_BSS
+@fardata . . . . . . . . . . . .	Text   	 FAR_DATA
+@stack . . . . . . . . . . . . .	Text   	 DGROUP
+begin  . . . . . . . . . . . . .	L Near	 0037	  _TEXT	
+pushcount  . . . . . . . . . . .	Byte	 00E1	  _DATA	
+scoresheet . . . . . . . . . . .	student	 0000	  _DATA	
+sheetlength  . . . . . . . . . .	Number	 0005h	 
+
+	   0 Warnings
+	   0 Errors
